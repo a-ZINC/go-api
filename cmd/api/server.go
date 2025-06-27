@@ -1,6 +1,11 @@
 package main
 
 import (
+	"api/internal/middleware"
+	"api/pkg/utils"
+	"context"
+	"crypto/tls"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -10,40 +15,50 @@ import (
 )
 
 func main() {
-	serverAddr := ":8080"
-	http.HandleFunc("/teachers", teacherHandler)
-	http.HandleFunc("/students", studentHandler)
-	http.HandleFunc("/exams", examHandler)
-	isActive := make(chan os.Signal, 1)
-	signal.Notify(isActive, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
-	go func() {
-		file, err := os.OpenFile("./shutdown.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		ticker := time.NewTicker(5 * time.Second)
-		if err != nil {
-			log.Fatalf("Error creating shutdown log file: %v", err)
-		}
-		defer file.Close()
-		for {
-			select {
-			case <-isActive:
-				log.Println("Received shutdown signal, shutting down server...")
-				_, err = file.WriteString("Server shutdown initiated\n")
-				if err != nil {
-					log.Fatalf("Error writing to shutdown log file: %v", err)
-				}
-				os.Exit(0)
-			case <-ticker.C:
-				log.Println("Server is running on", serverAddr)
+	mux := setupRoutes();
+	securityMux := middleware.SecurityHeaders(mux)
 
-			}
-		}
-
-	}()
-	err := http.ListenAndServe(serverAddr, nil)
-	if err != nil {
-		log.Fatalf("Error starting server: %v", err)
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
 	}
+	server := &http.Server{
+		Addr:         	":8000",
+		Handler: 		securityMux,
+		TLSConfig:    	tlsConfig,
+	}
+	go func() {
+		log.Printf("Starting server on port %s...", server.Addr)
+		key := "key.pem"
+		cert := "cert.pem"
+		err := server.ListenAndServeTLS(cert, key)
+		if err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+	}()
+
+	<- quit
+	log.Println("Shutting down server...")
+	ctx, cancel := context.WithTimeout((context.Background()), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("Error shutting down server: %v", err)
+		if closeError := server.Close(); closeError != nil {
+			log.Printf("Error closing server: %v", closeError)
+		}
+	} else {
+		log.Println("Server gracefully stopped")
+	}
+}
+
+func setupRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/teachers", teacherHandler)
+	mux.HandleFunc("/students", studentHandler)
+	mux.HandleFunc("/exams", examHandler)
+	return mux
 }
 
 func teacherHandler(w http.ResponseWriter, r *http.Request) {
@@ -77,8 +92,14 @@ func studentHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("GET request to /students")
 		w.Write([]byte("List of students"))
 	case http.MethodPost:
+		err := r.ParseForm()
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		name := utils.ParseFormData(r);
 		log.Println("POST request to /students")
-		w.Write([]byte("Create a new student"))
+		w.Write([]byte( fmt.Sprintf("Create a new student with name: %s", name)))
 	case http.MethodPut:
 		log.Println("PUT request to /students")
 		w.Write([]byte("Update a student"))
