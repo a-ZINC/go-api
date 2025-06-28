@@ -1,8 +1,8 @@
 package main
 
 import (
-	"api/internal/handlers"
 	"api/internal/middleware"
+	"api/internal/router"
 	"context"
 	"crypto/tls"
 	"log"
@@ -14,11 +14,11 @@ import (
 )
 
 func main() {
-	
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
-	mux := handlers.SetupRoutes()
+	mux := router.SetupRoutes()
 	rl := middleware.NewRateLimiter(10, 1*time.Minute)
 	hpp := middleware.NewHPP(true, true, "application/x-www-form-urlencoded", []string{"name", "age", "email"})
 	securityMux := hpp.HPP()(rl.RateLimiter(middleware.Compression(middleware.SecurityHeaders(middleware.CorsHeader(mux)))))
