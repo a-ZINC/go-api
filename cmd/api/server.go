@@ -19,7 +19,8 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
 	mux := setupRoutes();
-	securityMux := middleware.Compression(middleware.SecurityHeaders(middleware.CorsHeader(mux)))
+	rl := middleware.NewRateLimiter(10, 1*time.Minute)
+	securityMux := rl.RateLimiter(middleware.Compression(middleware.SecurityHeaders(middleware.CorsHeader(mux))))
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
