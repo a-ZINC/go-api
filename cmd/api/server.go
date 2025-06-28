@@ -20,7 +20,8 @@ func main() {
 
 	mux := setupRoutes();
 	rl := middleware.NewRateLimiter(10, 1*time.Minute)
-	securityMux := rl.RateLimiter(middleware.Compression(middleware.SecurityHeaders(middleware.CorsHeader(mux))))
+	hpp := middleware.NewHPP(true, true, "application/x-www-form-urlencoded", []string{"name", "age", "email"})
+	securityMux := hpp.HPP()(rl.RateLimiter(middleware.Compression(middleware.SecurityHeaders(middleware.CorsHeader(mux)))))
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
