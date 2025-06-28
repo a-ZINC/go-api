@@ -3,6 +3,7 @@ package main
 import (
 	"api/internal/middleware"
 	"api/internal/router"
+	"api/pkg/utils"
 	"context"
 	"crypto/tls"
 	"log"
@@ -21,7 +22,7 @@ func main() {
 	mux := router.SetupRoutes()
 	rl := middleware.NewRateLimiter(10, 1*time.Minute)
 	hpp := middleware.NewHPP(true, true, "application/x-www-form-urlencoded", []string{"name", "age", "email"})
-	securityMux := hpp.HPP()(rl.RateLimiter(middleware.Compression(middleware.SecurityHeaders(middleware.CorsHeader(mux)))))
+	securityMux := utils.ApplyMiddleware(mux, hpp.HPP(), middleware.SecurityHeaders, middleware.Compression, rl.RateLimiter, middleware.CorsHeader)
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
