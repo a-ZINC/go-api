@@ -2,6 +2,7 @@ package main
 
 import (
 	"api/internal/middleware"
+	"api/internal/repository"
 	"api/internal/router"
 	"api/pkg/utils"
 	"context"
@@ -15,7 +16,11 @@ import (
 )
 
 func main() {
-
+	err := repository.DbConnector()
+	if err != nil {
+		log.Printf("Error connecting to the database: %v", err)
+		os.Exit(1)
+	}
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
